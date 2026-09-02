@@ -5,6 +5,11 @@ poll_interval_ms: 100
 log_every_tick: false
 price_range: [10000, 99999]
 
+# OCR — 无需安装 Tesseract，默认 EasyOCR（仅 pip）
+ocr:
+  engine: easyocr       # easyocr | auto | windows | tesseract
+  tesseract_cmd: ""      # 若已装 Tesseract 可填完整路径，一般不用
+
 # 软件 A：模拟客户端 / 行情交易系统
 # 自绘界面读不到控件时，改 read_mode: region 并运行 calibrate_regions.py
 software_a:

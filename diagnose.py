@@ -67,6 +67,10 @@ def main() -> None:
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     lo, hi = raw.get("price_range", [10000, 99999])
 
+    from region_reader import init_ocr_from_config
+
+    init_ocr_from_config(raw.get("ocr"))
+
     print("当前可见窗口:")
     for t in list_windows():
         print(f"  - {t}")
@@ -75,15 +79,10 @@ def main() -> None:
     test_one("software_b", load_sw(raw["software_b"]), lo, hi)
 
     print("\n" + "=" * 60)
-    print("区域读价 OCR 依赖:")
-    print("  python -m pip install mss pillow numpy pytesseract")
-    print("  Tesseract 安装包(Windows):")
-    print("  https://github.com/UB-Mannheim/tesseract/wiki")
-    print("若 UI 读价失败（期货软件多为自绘界面）：")
-    print("  1. python calibrate_regions.py --target software_a")
-    print("  2. python calibrate_regions.py --target software_b")
-    print("  3. python diagnose.py")
-    print("  4. python spread_monitor.py")
+    print("OCR 无需 Tesseract，默认用 EasyOCR:")
+    print("  python -m pip install easyocr")
+    print("  python check_env.py")
+    print("若读价失败，检查 debug_*.png 截图，必要时重新标定区域")
 
 
 if __name__ == "__main__":

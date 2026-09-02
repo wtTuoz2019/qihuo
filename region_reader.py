@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import re
-import sys
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Optional
 
 try:
@@ -18,13 +16,9 @@ except ImportError:
     Image = None
     ImageOps = None
 
-PRICE_FROM_TEXT = re.compile(r"(\d{1,6}\.\d{1,2})")
+from ocr_engine import configure, ocr_image
 
-# Windows 常见 Tesseract 安装路径
-_TESSERACT_CANDIDATES = [
-    r"C:\Program Files\Tesseract-OCR\tesseract.exe",
-    r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
-]
+PRICE_FROM_TEXT = re.compile(r"(\d{1,6}\.\d{1,2})")
 
 
 @dataclass
@@ -65,21 +59,12 @@ class RegionSet:
         return any((self.bid, self.ask, self.last))
 
 
-def _setup_tesseract() -> None:
-    try:
-        import pytesseract
-    except ImportError as exc:
-        raise RuntimeError(
-            "请安装 OCR 依赖:\n"
-            "  python -m pip install mss pillow numpy pytesseract\n"
-            "并安装 Tesseract:\n"
-            "  https://github.com/UB-Mannheim/tesseract/wiki"
-        ) from exc
-
-    for p in _TESSERACT_CANDIDATES:
-        if Path(p).exists():
-            pytesseract.pytesseract.tesseract_cmd = p
-            return
+def init_ocr_from_config(ocr_cfg: dict | None) -> None:
+    ocr_cfg = ocr_cfg or {}
+    configure(
+        engine=ocr_cfg.get("engine", "easyocr"),
+        tesseract_cmd=ocr_cfg.get("tesseract_cmd", ""),
+    )
 
 
 def _capture(region: Region) -> Image.Image:
@@ -87,14 +72,12 @@ def _capture(region: Region) -> Image.Image:
         raise RuntimeError("缺少 mss / pillow: python -m pip install mss pillow numpy")
     with mss.mss() as sct:
         shot = sct.grab({"left": region.x, "top": region.y, "width": region.w, "height": region.h})
-        # mss 10.x 用 .rgb；旧版用 .bgra
         if hasattr(shot, "rgb"):
             return Image.frombytes("RGB", shot.size, shot.rgb)
         return Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
 
 
 def _preprocess(img: Image.Image) -> Image.Image:
-    # 放大 + 提对比，专用于绿色/白色数字
     gray = img.convert("L")
     up = gray.resize((max(gray.width * 3, 60), max(gray.height * 3, 24)), Image.Resampling.LANCZOS)
     arr = np.array(up)
@@ -120,41 +103,13 @@ def _parse_price_text(text: str, lo: float, hi: float) -> Optional[float]:
     return None
 
 
-def _ocr_tesseract(img: Image.Image) -> str:
-    import pytesseract
-
-    _setup_tesseract()
-    config = r"--psm 7 -c tessedit_char_whitelist=0123456789."
-    return pytesseract.image_to_string(img, config=config)
-
-
-def _ocr_rapidocr(img: Image.Image) -> str:
-    from rapidocr_onnxruntime import RapidOCR
-
-    ocr = RapidOCR()
-    result, _ = ocr(np.array(img))
-    if not result:
-        return ""
-    return " ".join(item[1] for item in result)
-
-
-def _ocr_text(img: Image.Image) -> str:
-    # Python 3.12+ 优先 tesseract；3.11 及以下可试 rapidocr
-    if sys.version_info >= (3, 12):
-        return _ocr_tesseract(img)
-    try:
-        return _ocr_rapidocr(img)
-    except ImportError:
-        return _ocr_tesseract(img)
-
-
 def ocr_region(region: Region, lo: float, hi: float, save_debug: str = "") -> Optional[float]:
     img = _capture(region)
     proc = _preprocess(img)
     if save_debug:
         proc.save(save_debug)
 
-    text = _ocr_text(proc)
+    text = ocr_image(proc)
     return _parse_price_text(text, lo, hi)
 
 

@@ -13,7 +13,7 @@ from __future__ import annotations
 import argparse
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -50,6 +50,7 @@ class AppConfig:
     alert: AlertConfig
     price_range: tuple[float, float] = (1000, 999999)
     log_every_tick: bool = False
+    ocr: dict = field(default_factory=dict)
 
 
 def load_config(path: Path) -> AppConfig:
@@ -105,6 +106,7 @@ def load_config(path: Path) -> AppConfig:
         alert=alert,
         price_range=(float(pr[0]), float(pr[1])),
         log_every_tick=bool(raw.get("log_every_tick", False)),
+        ocr=raw.get("ocr") or {},
     )
 
 
@@ -158,6 +160,10 @@ def main() -> None:
     interval = cfg.poll_interval_ms / 1000.0
     engine = AlertEngine(cfg.alert)
     lo, hi = cfg.price_range
+
+    from region_reader import init_ocr_from_config
+
+    init_ocr_from_config(getattr(cfg, "ocr", None) or {})
 
     print("=" * 72)
     print("  实时价差监控 [交易模式]")
