@@ -1,0 +1,49 @@
+# 复制为 config.yaml 后在 Windows 上运行
+
+poll_interval_ms: 100
+
+log_every_tick: false
+price_range: [10000, 99999]
+
+# 软件 A：模拟客户端 / 行情交易系统
+# 自绘界面读不到控件时，改 read_mode: region 并运行 calibrate_regions.py
+software_a:
+  window_title: "行情交易系统"
+  read_mode: region          # auto | ui | region
+  regions:
+    bid: [0, 0, 0, 0]        # calibrate_regions.py 会自动填写 [x,y,w,h]
+    ask: [0, 0, 0, 0]
+    last: [0, 0, 0, 0]
+  labels:
+    bid: "买入"
+    ask: "卖出"
+    last: ""
+
+software_b:
+  window_title: "同花顺"
+  read_mode: region
+  regions:
+    bid: [0, 0, 0, 0]
+    ask: [0, 0, 0, 0]
+    last: [0, 0, 0, 0]
+  labels:
+    bid: "买价"
+    ask: "卖价"
+    last: ""
+
+compare:
+  mode: executable
+
+alert:
+  tick_size: 0.25
+  open_a_sell_b_buy_ticks: 1.0
+  open_b_sell_a_buy_ticks: 1.0
+  mid_spread_ticks: 0
+  confirm_reads: 1
+  cooldown_ms: 800
+  sound: true
+  log_csv: spreads.csv
+
+webhook:
+  enabled: false
+  url: "http://192.168.1.x:8080/alert"

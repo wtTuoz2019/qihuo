@@ -1,0 +1,9 @@
+uiautomation>=2.0.18
+pyyaml>=6.0
+requests>=2.31.0
+mss>=9.0.1
+pillow>=10.0.0
+numpy>=1.24.0
+pytesseract>=0.3.10
+# 仅 Python 3.11 及以下可选（3.12+ 用 Tesseract）
+rapidocr-onnxruntime>=1.2.0; python_version < "3.12"
