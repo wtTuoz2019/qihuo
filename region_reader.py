@@ -87,7 +87,10 @@ def _capture(region: Region) -> Image.Image:
         raise RuntimeError("缺少 mss / pillow: python -m pip install mss pillow numpy")
     with mss.mss() as sct:
         shot = sct.grab({"left": region.x, "top": region.y, "width": region.w, "height": region.h})
-        return Image.frombytes("RGB", shot.size, shot.bgr, "raw", "BGRX")
+        # mss 10.x 用 .rgb；旧版用 .bgra
+        if hasattr(shot, "rgb"):
+            return Image.frombytes("RGB", shot.size, shot.rgb)
+        return Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
 
 
 def _preprocess(img: Image.Image) -> Image.Image:

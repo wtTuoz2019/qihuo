@@ -43,6 +43,16 @@ def test_one(name: str, cfg: SoftwareConfig, lo: float, hi: float) -> None:
         print(f"  错误: {st.error}")
     print(f"  结果: bid={q.bid} ask={q.ask} last={q.last} valid={q.valid()}")
 
+    # 保存 OCR 调试截图，方便检查框选是否准确
+    if cfg.regions.bid:
+        try:
+            from region_reader import ocr_region
+
+            ocr_region(cfg.regions.bid, lo, hi, save_debug=f"debug_{name}_bid.png")
+            print(f"  调试截图: debug_{name}_bid.png")
+        except Exception as exc:
+            print(f"  调试截图失败: {exc}")
+
 
 def main() -> None:
     parser = argparse.ArgumentParser()
