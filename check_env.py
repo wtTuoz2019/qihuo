@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 
 from ocr_engine import check_engines, configure, ocr_image
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 
 def _test_ocr() -> None:
@@ -16,7 +16,7 @@ def _test_ocr() -> None:
     if "29509" in text.replace(" ", ""):
         print("  ✓ OCR 实测通过")
     else:
-        print(f"  △ OCR 实测结果: {text!r}（若读价正常可忽略）")
+        print(f"  △ OCR 实测结果: {text!r}（若 diagnose 读价正常可忽略）")
 
 
 def main() -> None:
@@ -34,8 +34,8 @@ def main() -> None:
             print(f"  ✗ {m}  → python -m pip install -r requirements.txt")
 
     print()
-    print("OCR 引擎（无需 Tesseract，推荐 EasyOCR）:")
-    configure(engine="easyocr")
+    print("OCR 引擎（推荐 Windows 内置，安装快，不用 EasyOCR）:")
+    configure(engine="windows")
     for name, msg in check_engines().items():
         print(f"  [{name}] {msg}")
 
@@ -44,14 +44,13 @@ def main() -> None:
         _test_ocr()
     except Exception as exc:
         print(f"  ✗ OCR 测试失败: {exc}")
-        print("    请运行: python -m pip install easyocr")
-        print("    首次会下载约 100MB 模型，需联网")
+        print("    运行下面这一条（约 1 分钟，比 easyocr 快很多）:")
+        print("    python -m pip install winrt-runtime winrt-Windows.Media.Ocr winrt-Windows.Graphics.Imaging winrt-Windows.Storage.Streams winrt-Windows.Globalization")
 
     print()
     print("下一步:")
-    print("  python calibrate_regions.py --target software_a")
-    print("  python calibrate_regions.py --target software_b")
     print("  python diagnose.py")
+    print("  python spread_monitor.py")
 
 
 if __name__ == "__main__":

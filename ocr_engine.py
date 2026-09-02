@@ -1,4 +1,4 @@
-"""OCR 引擎 — 默认 EasyOCR（仅 pip，无需装 Tesseract）。"""
+"""OCR 引擎 — Windows 默认用系统自带 OCR（安装快，无需 PyTorch）。"""
 
 from __future__ import annotations
 
@@ -133,7 +133,7 @@ def _try_engine(name: str, img: Image.Image) -> Optional[str]:
 def _engine_order() -> list[str]:
     if _ENGINE == "auto":
         if sys.platform == "win32":
-            return ["easyocr", "windows", "tesseract"]
+            return ["windows", "tesseract", "easyocr"]
         return ["easyocr", "tesseract"]
     return [_ENGINE]
 
@@ -155,7 +155,10 @@ def ocr_image(img: Image.Image) -> str:
             errors.append(f"{name}: {exc}")
     raise RuntimeError(
         "所有 OCR 引擎均不可用。\n"
-        "请运行: python -m pip install easyocr\n"
+        "Windows 推荐（安装快）:\n"
+        "  python -m pip install winrt-runtime winrt-Windows.Media.Ocr "
+        "winrt-Windows.Graphics.Imaging winrt-Windows.Storage.Streams winrt-Windows.Globalization\n"
+        "并在 config.yaml 设置 ocr.engine: windows\n"
         + "\n".join(errors)
     )
 
@@ -163,28 +166,32 @@ def ocr_image(img: Image.Image) -> str:
 def check_engines() -> dict[str, str]:
     """返回各引擎状态，供 check_env 使用。"""
     status: dict[str, str] = {}
-
-    try:
-        import easyocr  # noqa: F401
-
-        status["easyocr"] = "ok (pip 已装，首次运行会下载模型)"
-    except ImportError:
-        status["easyocr"] = "缺失 → python -m pip install easyocr"
+    winrt_cmd = (
+        "python -m pip install winrt-runtime winrt-Windows.Media.Ocr "
+        "winrt-Windows.Graphics.Imaging winrt-Windows.Storage.Streams winrt-Windows.Globalization"
+    )
 
     if sys.platform == "win32":
         try:
             import winrt  # noqa: F401
 
-            status["windows"] = "ok (Win10/11 内置 OCR)"
+            status["windows"] = "ok ← 推荐，Win10/11 内置 OCR，安装快"
         except ImportError:
-            status["windows"] = "可选 → python -m pip install winrt-runtime winrt-Windows.Media.Ocr winrt-Windows.Graphics.Imaging winrt-Windows.Storage.Streams winrt-Windows.Globalization"
+            status["windows"] = f"缺失 → {winrt_cmd}"
     else:
         status["windows"] = "仅 Windows"
+
+    try:
+        import easyocr  # noqa: F401
+
+        status["easyocr"] = "ok（备选，体积大、安装慢，含 PyTorch）"
+    except ImportError:
+        status["easyocr"] = "未装（可不装，用 windows 即可）"
 
     cmd = _find_tesseract()
     if cmd:
         status["tesseract"] = f"ok ({cmd})"
     else:
-        status["tesseract"] = "未安装（可不用，推荐 EasyOCR）"
+        status["tesseract"] = "未安装（可选）"
 
     return status

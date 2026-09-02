@@ -79,9 +79,8 @@ def main() -> None:
     test_one("software_b", load_sw(raw["software_b"]), lo, hi)
 
     print("\n" + "=" * 60)
-    print("OCR 无需 Tesseract，默认用 EasyOCR:")
-    print("  python -m pip install easyocr")
-    print("  python check_env.py")
+    print("OCR 推荐 Windows 内置（config.yaml → ocr.engine: windows）:")
+    print("  python -m pip install -r requirements.txt")
     print("若读价失败，检查 debug_*.png 截图，必要时重新标定区域")
 
 
