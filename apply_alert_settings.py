@@ -33,7 +33,7 @@ def main() -> None:
     cfg["alert"] = alert
     CONFIG.write_text(yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False), encoding="utf-8")
     print("✓ 已写入告警设置（regions 未改）")
-    print("  |价差| >= 5 点 → 蜂鸣 + 写入 spreads.log / spreads.csv")
+    print("  |价差| >= 5 点 → 蜂鸣 + 写入 logs/spreads.log / logs/spreads.csv")
     print("下一步: python spread_monitor.py")
 
 

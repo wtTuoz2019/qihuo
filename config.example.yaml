@@ -47,6 +47,7 @@ alert:
   sound: true
   log_csv: spreads.csv
   log_txt: spreads.log
+  # 实际写入 logs/spreads.csv 与 logs/spreads.log
 
 webhook:
   enabled: false

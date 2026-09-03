@@ -8,10 +8,9 @@ env/
 # 本地配置（Windows 标定的坐标，每台机器不同）
 config.yaml
 
-# 运行产物
-spreads.csv
-*.log
-debug_*.png
+# 运行产物全部在 logs/
+logs/*
+!logs/.gitkeep
 
 # IDE
 .idea/

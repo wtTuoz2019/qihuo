@@ -178,7 +178,10 @@ def main() -> None:
     print(f"  B: {cfg.software_b.window_title!r} mode={cfg.software_b.read_mode}")
     print(f"  轮询: {cfg.poll_interval_ms} ms")
     print(f"  告警: |价差| >= {cfg.alert.spread_yuan:.0f} 点  声音={cfg.alert.sound}")
-    print(f"  日志: {cfg.alert.log_txt}  /  {cfg.alert.log_csv}")
+    from paths import log_path
+
+    print(f"  日志目录: logs/")
+    print(f"  日志: {log_path(cfg.alert.log_txt).name}  /  {log_path(cfg.alert.log_csv).name}")
     print("-" * 72)
 
     wins = list_windows()

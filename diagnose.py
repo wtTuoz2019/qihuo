@@ -53,6 +53,7 @@ def test_one(name: str, cfg: SoftwareConfig, lo: float, hi: float) -> None:
         print(f"  错误: {st.error}")
     print(f"  结果: bid={q.bid} ask={q.ask} last={q.last} valid={q.valid()}")
 
+    from paths import log_path
     from region_reader import ocr_region
 
     for field in ("bid", "ask", "last"):
@@ -60,10 +61,11 @@ def test_one(name: str, cfg: SoftwareConfig, lo: float, hi: float) -> None:
         if not region:
             continue
         try:
+            shot = log_path(f"debug_{name}_{field}.png")
             price, raw = ocr_region(
-                region, lo, hi, save_debug=f"debug_{name}_{field}.png", return_text=True
+                region, lo, hi, save_debug=str(shot), return_text=True
             )
-            print(f"  {field}: {price}  OCR原文={raw!r}  截图=debug_{name}_{field}.png")
+            print(f"  {field}: {price}  OCR原文={raw!r}  截图={shot}")
         except Exception as exc:
             print(f"  {field} 调试失败: {exc}")
 
@@ -93,7 +95,7 @@ def main() -> None:
     test_one("software_b", load_sw(raw["software_b"]), lo, hi)
 
     print("\n" + "=" * 60)
-    print("打开 debug_*.png 看框选是否盖住价格数字。")
+    print("打开 logs/debug_*.png 看框选是否盖住价格数字。")
     print("若 OCR原文 为空或不是价格，重新标定该字段。")
 
 

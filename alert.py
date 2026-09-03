@@ -8,7 +8,8 @@ import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
+
+from paths import log_path
 
 try:
     import requests
@@ -34,8 +35,8 @@ class AlertEngine:
         self.cfg = cfg
         self._streak: dict[str, int] = {}
         self._last_alert: dict[str, float] = {}
-        self._log_path = Path(cfg.log_csv)
-        self._txt_path = Path(cfg.log_txt)
+        self._log_path = log_path(cfg.log_csv)
+        self._txt_path = log_path(cfg.log_txt)
         self._ensure_csv()
 
     def _ensure_csv(self) -> None:
