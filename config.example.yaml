@@ -2,7 +2,7 @@
 
 poll_interval_ms: 100
 
-log_every_tick: false
+log_every_tick: true
 price_range: [10000, 99999]
 
 # OCR — 你已安装 EasyOCR 时用 easyocr
@@ -41,13 +41,12 @@ compare:
 
 alert:
   tick_size: 0.25
-  open_a_sell_b_buy_ticks: 1.0
-  open_b_sell_a_buy_ticks: 1.0
-  mid_spread_ticks: 0
-  confirm_reads: 1
-  cooldown_ms: 800
+  spread_yuan: 5.0       # |A最新价-B最新价| >= 5 点告警
+  confirm_reads: 2       # 连续 2 次确认，减少 OCR 误报
+  cooldown_ms: 2000      # 同方向 2 秒内不重复蜂鸣
   sound: true
   log_csv: spreads.csv
+  log_txt: spreads.log
 
 webhook:
   enabled: false

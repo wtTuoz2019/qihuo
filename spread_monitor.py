@@ -87,13 +87,12 @@ def load_config(path: Path) -> AppConfig:
 
     alert = AlertConfig(
         tick_size=float(alert_raw.get("tick_size", 0.25)),
-        open_a_sell_b_buy_ticks=float(alert_raw.get("open_a_sell_b_buy_ticks", 1.0)),
-        open_b_sell_a_buy_ticks=float(alert_raw.get("open_b_sell_a_buy_ticks", 1.0)),
-        mid_spread_ticks=float(alert_raw.get("mid_spread_ticks", 0)),
-        confirm_reads=int(alert_raw.get("confirm_reads", 1)),
-        cooldown_ms=int(alert_raw.get("cooldown_ms", 800)),
+        spread_yuan=float(alert_raw.get("spread_yuan", 5.0)),
+        confirm_reads=int(alert_raw.get("confirm_reads", 2)),
+        cooldown_ms=int(alert_raw.get("cooldown_ms", 2000)),
         sound=bool(alert_raw.get("sound", True)),
         log_csv=str(alert_raw.get("log_csv", "spreads.csv")),
+        log_txt=str(alert_raw.get("log_txt", "spreads.log")),
         webhook_enabled=bool(webhook.get("enabled", False)),
         webhook_url=str(webhook.get("url") or ""),
     )
@@ -126,12 +125,19 @@ def build_snapshot(qa: Quote, qb: Quote, loop_latency_ms: float) -> dict:
     if ma is not None and mb is not None:
         mid_spread = round(ma - mb, 2)
 
+    last_spread = None
+    if qa.last is not None and qb.last is not None:
+        last_spread = round(qa.last - qb.last, 2)
+    elif mid_spread is not None:
+        last_spread = mid_spread
+
     return {
         "a_bid": qa.bid, "a_ask": qa.ask, "a_last": qa.last,
         "b_bid": qb.bid, "b_ask": qb.ask, "b_last": qb.last,
         "exec_a_sell_b_buy": exec_ab,
         "exec_b_sell_a_buy": exec_ba,
         "mid_spread": mid_spread,
+        "last_spread": last_spread,
         "latency_ms": round(loop_latency_ms, 1),
     }
 
@@ -170,7 +176,9 @@ def main() -> None:
     print("=" * 72)
     print(f"  A: {cfg.software_a.window_title!r} mode={cfg.software_a.read_mode}")
     print(f"  B: {cfg.software_b.window_title!r} mode={cfg.software_b.read_mode}")
-    print(f"  轮询: {cfg.poll_interval_ms} ms | Tick: {cfg.alert.tick_size}")
+    print(f"  轮询: {cfg.poll_interval_ms} ms")
+    print(f"  告警: |价差| >= {cfg.alert.spread_yuan:.0f} 点  声音={cfg.alert.sound}")
+    print(f"  日志: {cfg.alert.log_txt}  /  {cfg.alert.log_csv}")
     print("-" * 72)
 
     wins = list_windows()
@@ -216,6 +224,7 @@ def main() -> None:
         exec_ab = snap["exec_a_sell_b_buy"]
         exec_ba = snap["exec_b_sell_a_buy"]
         mid = snap["mid_spread"]
+        last_sp = snap["last_spread"]
 
         def _fmt_spread(v: Optional[float]) -> str:
             return f"{v:+.2f}" if v is not None else "  --  "
@@ -224,20 +233,20 @@ def main() -> None:
             f"[{ts}] "
             f"A {_fmt(qa.bid)}/{_fmt(qa.ask)}/{_fmt(qa.last)} | "
             f"B {_fmt(qb.bid)}/{_fmt(qb.ask)}/{_fmt(qb.last)} | "
-            f"AB {_fmt_spread(exec_ab)} BA {_fmt_spread(exec_ba)} Mid {_fmt_spread(mid)} | "
+            f"价差 {_fmt_spread(last_sp)} Mid {_fmt_spread(mid)} | "
+            f"AB {_fmt_spread(exec_ab)} BA {_fmt_spread(exec_ba)} | "
             f"{loop_ms:.0f}ms"
         )
 
-        if line != last_line:
+        changed = line != last_line
+        if changed:
             print(line)
             last_line = line
+            engine.log_tick(snap)
 
         alerts = engine.evaluate(snap)
         for msg in alerts:
-            print(f"\033[91m{msg}\033[0m" if sys.platform == "win32" else msg)
-
-        if cfg.log_every_tick:
-            engine.log_tick(snap)
+            print(f"\033[91m{msg}\033[0m")
 
         if args.once:
             break

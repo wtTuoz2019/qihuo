@@ -1,4 +1,4 @@
-"""交易向价差告警 — 声音、日志、Webhook。"""
+"""交易向价差告警 — 声音、CSV、可读日志。"""
 
 from __future__ import annotations
 
@@ -19,14 +19,12 @@ except ImportError:
 @dataclass
 class AlertConfig:
     tick_size: float = 0.25
-    # 可执行价差阈值（tick 数）。NQ 迷你纳指最小变动 0.25
-    open_a_sell_b_buy_ticks: float = 1.0   # A_bid - B_ask >= N tick → 在 A 卖、在 B 买
-    open_b_sell_a_buy_ticks: float = 1.0   # B_bid - A_ask >= N tick
-    mid_spread_ticks: float = 0.0          # |mid_A - mid_B| 超过则提示（0=关闭）
-    confirm_reads: int = 1                 # 连续 N 次满足才告警，1=最敏感
-    cooldown_ms: int = 800                 # 同方向告警冷却
+    spread_yuan: float = 5.0  # |价差| >= 此值（点/元）即告警
+    confirm_reads: int = 2
+    cooldown_ms: int = 2000
     sound: bool = True
     log_csv: str = "spreads.csv"
+    log_txt: str = "spreads.log"
     webhook_enabled: bool = False
     webhook_url: str = ""
 
@@ -37,6 +35,7 @@ class AlertEngine:
         self._streak: dict[str, int] = {}
         self._last_alert: dict[str, float] = {}
         self._log_path = Path(cfg.log_csv)
+        self._txt_path = Path(cfg.log_txt)
         self._ensure_csv()
 
     def _ensure_csv(self) -> None:
@@ -48,14 +47,12 @@ class AlertEngine:
                 "datetime", "event",
                 "a_bid", "a_ask", "a_last",
                 "b_bid", "b_ask", "b_last",
-                "exec_a_sell_b_buy", "exec_b_sell_a_buy", "mid_spread",
+                "last_spread", "mid_spread",
+                "exec_a_sell_b_buy", "exec_b_sell_a_buy",
                 "latency_ms",
             ])
 
-    def _tick_threshold(self, ticks: float) -> float:
-        return ticks * self.cfg.tick_size
-
-    def _beep(self, urgent: bool = False) -> None:
+    def _beep(self, urgent: bool = True) -> None:
         if not self.cfg.sound or sys.platform != "win32":
             return
 
@@ -64,9 +61,9 @@ class AlertEngine:
                 import winsound
 
                 if urgent:
-                    for freq in (1200, 1600, 1200):
-                        winsound.Beep(freq, 120)
-                        time.sleep(0.02)
+                    for _ in range(3):
+                        winsound.Beep(1500, 250)
+                        time.sleep(0.08)
                 else:
                     winsound.Beep(1000, 180)
             except Exception:
@@ -89,16 +86,29 @@ class AlertEngine:
         return self._streak[key] >= self.cfg.confirm_reads
 
     def _log_row(self, event: str, snap: dict) -> None:
+        now = datetime.now()
+        iso = now.isoformat(timespec="milliseconds")
         with self._log_path.open("a", newline="", encoding="utf-8") as f:
             w = csv.writer(f)
             w.writerow([
-                datetime.now().isoformat(timespec="milliseconds"),
-                event,
+                iso, event,
                 snap.get("a_bid"), snap.get("a_ask"), snap.get("a_last"),
                 snap.get("b_bid"), snap.get("b_ask"), snap.get("b_last"),
+                snap.get("last_spread"), snap.get("mid_spread"),
                 snap.get("exec_a_sell_b_buy"), snap.get("exec_b_sell_a_buy"),
-                snap.get("mid_spread"), snap.get("latency_ms"),
+                snap.get("latency_ms"),
             ])
+
+        line = (
+            f"{now:%Y-%m-%d %H:%M:%S.%f}"[:-3]
+            f" {event}"
+            f" A={snap.get('a_last')} B={snap.get('b_last')}"
+            f" 价差={snap.get('last_spread')}"
+            f" Mid={snap.get('mid_spread')}"
+            f" AB={snap.get('exec_a_sell_b_buy')} BA={snap.get('exec_b_sell_a_buy')}\n"
+        )
+        with self._txt_path.open("a", encoding="utf-8") as f:
+            f.write(line)
 
     def _webhook(self, payload: dict) -> None:
         if not self.cfg.webhook_enabled or not self.cfg.webhook_url or not requests:
@@ -112,45 +122,34 @@ class AlertEngine:
 
         threading.Thread(target=_post, daemon=True).start()
 
+    def _main_spread(self, snap: dict) -> float | None:
+        if snap.get("last_spread") is not None:
+            return abs(float(snap["last_spread"]))
+        if snap.get("mid_spread") is not None:
+            return abs(float(snap["mid_spread"]))
+        return None
+
     def evaluate(self, snap: dict) -> list[str]:
-        """返回本轮触发的告警文案。"""
         messages: list[str] = []
-        exec_ab = snap.get("exec_a_sell_b_buy")
-        exec_ba = snap.get("exec_b_sell_a_buy")
-        mid = snap.get("mid_spread")
+        th = self.cfg.spread_yuan
+        spread = self._main_spread(snap)
+        signed = snap.get("last_spread")
+        if signed is None:
+            signed = snap.get("mid_spread")
 
-        th_ab = self._tick_threshold(self.cfg.open_a_sell_b_buy_ticks)
-        th_ba = self._tick_threshold(self.cfg.open_b_sell_a_buy_ticks)
-        th_mid = self._tick_threshold(self.cfg.mid_spread_ticks) if self.cfg.mid_spread_ticks > 0 else None
+        cond = spread is not None and spread >= th
+        if not self._streak_hit("abs_spread", cond):
+            return messages
+        if not self._cooldown_ok("abs_spread"):
+            return messages
 
-        checks = []
-        if exec_ab is not None:
-            checks.append(("A卖B买", "exec_ab", exec_ab, exec_ab >= th_ab, th_ab))
-        if exec_ba is not None:
-            checks.append(("B卖A买", "exec_ba", exec_ba, exec_ba >= th_ba, th_ba))
-        if th_mid and mid is not None:
-            checks.append(("Mid偏离", "mid", abs(mid), abs(mid) >= th_mid, th_mid))
-
-        urgent = False
-        for label, key, value, raw_cond, th in checks:
-            if not self._streak_hit(key, raw_cond):
-                continue
-            if not self._cooldown_ok(key):
-                continue
-
-            ticks = value / self.cfg.tick_size
-            th_ticks = th / self.cfg.tick_size
-            msg = f"【告警】{label} 可执行价差 {value:+.2f} ({ticks:.1f} tick >= {th_ticks:.1f} tick)"
-            messages.append(msg)
-            self._mark_alert(key)
-            self._log_row(f"ALERT_{key}", snap)
-            self._webhook({"type": "alert", "label": label, "value": value, **snap})
-            if label in ("A卖B买", "B卖A买"):
-                urgent = True
-
-        if messages:
-            self._beep(urgent=urgent)
-
+        direction = "A高于B" if (signed or 0) > 0 else "B高于A"
+        msg = f"【告警】价差 {signed:+.2f} 点（|{spread:.2f}| >= {th:.0f}）{direction}"
+        messages.append(msg)
+        self._mark_alert("abs_spread")
+        self._log_row("ALERT", snap)
+        self._webhook({"type": "alert", "spread": signed, "abs": spread, **snap})
+        self._beep(urgent=True)
         return messages
 
     def log_tick(self, snap: dict) -> None:
