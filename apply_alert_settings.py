@@ -32,16 +32,18 @@ def main() -> None:
     cfg["alert"] = alert
     trade = cfg.get("trade") or {}
     trade.setdefault("alert_spread", 5.0)
-    trade.setdefault("order_spread", 5.0)
+    trade.setdefault("open_long_spread", 5.0)
+    trade.setdefault("open_short_spread", -5.0)
+    trade.setdefault("leader", "software_b")
+    trade.setdefault("order_on", "software_a")
     trade.setdefault("auto_order", False)
     trade.setdefault("dry_run", True)
     trade.setdefault("lots", 1)
-    trade.setdefault("software", "software_a")
     cfg["trade"] = trade
     CONFIG.write_text(yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False), encoding="utf-8")
-    print("✓ 已写入告警/下单设置（regions 与 clicks 未覆盖）")
-    print(f"  改阈值: 编辑 config.yaml → trade.alert_spread / trade.order_spread")
-    print("  下单标定: python calibrate_order.py")
+    print("✓ 已写入：同花顺领先 → 模拟客户端跟单")
+    print("  lead=同花顺-模拟  >=5开多  <=-5开空")
+    print("  改阈值: config.yaml → trade.open_long_spread / open_short_spread")
     print("下一步: python spread_monitor.py")
 
 

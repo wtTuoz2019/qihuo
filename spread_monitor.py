@@ -137,10 +137,13 @@ def build_snapshot(qa: Quote, qb: Quote, loop_latency_ms: float) -> dict:
         mid_spread = round(ma - mb, 2)
 
     last_spread = None
+    lead_spread = None
     if qa.last is not None and qb.last is not None:
-        last_spread = round(qa.last - qb.last, 2)
+        last_spread = round(qa.last - qb.last, 2)       # 模拟 - 同花顺
+        lead_spread = round(qb.last - qa.last, 2)       # 同花顺 - 模拟（领先差）
     elif mid_spread is not None:
         last_spread = mid_spread
+        lead_spread = round(-mid_spread, 2)
 
     return {
         "a_bid": qa.bid, "a_ask": qa.ask, "a_last": qa.last,
@@ -149,6 +152,7 @@ def build_snapshot(qa: Quote, qb: Quote, loop_latency_ms: float) -> dict:
         "exec_b_sell_a_buy": exec_ba,
         "mid_spread": mid_spread,
         "last_spread": last_spread,
+        "lead_spread": lead_spread,
         "latency_ms": round(loop_latency_ms, 1),
     }
 
@@ -189,8 +193,9 @@ def main() -> None:
     print(f"  A: {cfg.software_a.window_title!r} mode={cfg.software_a.read_mode}")
     print(f"  B: {cfg.software_b.window_title!r} mode={cfg.software_b.read_mode}")
     print(f"  轮询: {cfg.poll_interval_ms} ms")
-    print(f"  告警: |价差| >= {cfg.trade.alert_spread:.1f} 点  声音={cfg.alert.sound}")
-    print(f"  下单: auto_order={cfg.trade.auto_order} dry_run={cfg.trade.dry_run} 阈值={cfg.trade.order_spread:.1f}")
+    print(f"  告警: |同花顺-模拟| >= {cfg.trade.alert_spread:.1f}  声音={cfg.alert.sound}")
+    print(f"  开多: 领先差 >= {cfg.trade.open_long_spread:+.1f}   开空: 领先差 <= {cfg.trade.open_short_spread:+.1f}")
+    print(f"  下单: auto_order={cfg.trade.auto_order} dry_run={cfg.trade.dry_run} 目标={cfg.trade.order_on}")
     from paths import log_path
 
     print(f"  日志目录: logs/")
@@ -241,16 +246,16 @@ def main() -> None:
         exec_ba = snap["exec_b_sell_a_buy"]
         mid = snap["mid_spread"]
         last_sp = snap["last_spread"]
+        lead = snap["lead_spread"]
 
         def _fmt_spread(v: Optional[float]) -> str:
             return f"{v:+.2f}" if v is not None else "  --  "
 
         line = (
             f"[{ts}] "
-            f"A {_fmt(qa.bid)}/{_fmt(qa.ask)}/{_fmt(qa.last)} | "
-            f"B {_fmt(qb.bid)}/{_fmt(qb.ask)}/{_fmt(qb.last)} | "
-            f"价差 {_fmt_spread(last_sp)} Mid {_fmt_spread(mid)} | "
-            f"AB {_fmt_spread(exec_ab)} BA {_fmt_spread(exec_ba)} | "
+            f"模拟 {_fmt(qa.last)} 同花顺 {_fmt(qb.last)} | "
+            f"领先差 {_fmt_spread(lead)} | "
+            f"A {_fmt(qa.bid)}/{_fmt(qa.ask)} B {_fmt(qb.bid)}/{_fmt(qb.ask)} | "
             f"{loop_ms:.0f}ms"
         )
 

@@ -39,18 +39,21 @@ software_b:
 compare:
   mode: executable
 
-# 阈值与下单（改这里即可，不必改代码）
+# 阈值与下单（同花顺领先 → 在模拟客户端跟单）
+# lead = 同花顺最新价 - 模拟客户端最新价
 trade:
-  alert_spread: 5.0      # |价差| >= 此值告警
-  order_spread: 5.0      # |价差| >= 此值才考虑下单
-  auto_order: false      # true 才允许走下单模块
-  dry_run: true          # true=只写 logs/orders.log，不点鼠标
+  alert_spread: 5.0          # |lead| >= 此值告警
+  open_long_spread: 5.0      # lead >= 此值 → 开多
+  open_short_spread: -5.0    # lead <= 此值 → 开空
+  leader: software_b         # 同花顺
+  order_on: software_a       # 在模拟客户端下单
+  auto_order: false
+  dry_run: true
   lots: 1
   cooldown_ms: 5000
-  software: software_a   # 默认在模拟客户端下单
-  clicks:                # python calibrate_order.py 填写 [x, y]
-    buy: [0, 0]
-    sell: [0, 0]
+  clicks:                    # python calibrate_order.py
+    buy: [0, 0]              # 开多
+    sell: [0, 0]             # 开空
     confirm: [0, 0]
 
 alert:

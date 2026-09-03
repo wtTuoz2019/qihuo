@@ -48,7 +48,7 @@ class AlertEngine:
                 "datetime", "event",
                 "a_bid", "a_ask", "a_last",
                 "b_bid", "b_ask", "b_last",
-                "last_spread", "mid_spread",
+                "lead_spread", "last_spread", "mid_spread",
                 "exec_a_sell_b_buy", "exec_b_sell_a_buy",
                 "latency_ms",
             ])
@@ -95,15 +95,15 @@ class AlertEngine:
                 iso, event,
                 snap.get("a_bid"), snap.get("a_ask"), snap.get("a_last"),
                 snap.get("b_bid"), snap.get("b_ask"), snap.get("b_last"),
-                snap.get("last_spread"), snap.get("mid_spread"),
+                snap.get("lead_spread"), snap.get("last_spread"), snap.get("mid_spread"),
                 snap.get("exec_a_sell_b_buy"), snap.get("exec_b_sell_a_buy"),
                 snap.get("latency_ms"),
             ])
 
         line = (
             f"{iso} {event}"
-            f" A={snap.get('a_last')} B={snap.get('b_last')}"
-            f" 价差={snap.get('last_spread')}"
+            f" 模拟={snap.get('a_last')} 同花顺={snap.get('b_last')}"
+            f" 领先差={snap.get('lead_spread')}"
             f" Mid={snap.get('mid_spread')}"
             f" AB={snap.get('exec_a_sell_b_buy')} BA={snap.get('exec_b_sell_a_buy')}\n"
         )
@@ -123,6 +123,8 @@ class AlertEngine:
         threading.Thread(target=_post, daemon=True).start()
 
     def _main_spread(self, snap: dict) -> float | None:
+        if snap.get("lead_spread") is not None:
+            return abs(float(snap["lead_spread"]))
         if snap.get("last_spread") is not None:
             return abs(float(snap["last_spread"]))
         if snap.get("mid_spread") is not None:
@@ -133,9 +135,14 @@ class AlertEngine:
         messages: list[str] = []
         th = self.cfg.spread_yuan
         spread = self._main_spread(snap)
-        signed = snap.get("last_spread")
-        if signed is None:
-            signed = snap.get("mid_spread")
+        lead = snap.get("lead_spread")
+        if lead is None:
+            signed = snap.get("last_spread")
+            if signed is None:
+                signed = snap.get("mid_spread")
+            lead = -float(signed) if signed is not None else None
+        else:
+            lead = float(lead)
 
         cond = spread is not None and spread >= th
         if not self._streak_hit("abs_spread", cond):
@@ -143,12 +150,15 @@ class AlertEngine:
         if not self._cooldown_ok("abs_spread"):
             return messages
 
-        direction = "A高于B" if (signed or 0) > 0 else "B高于A"
-        msg = f"【告警】价差 {signed:+.2f} 点（|{spread:.2f}| >= {th:.0f}）{direction}"
+        if lead is not None and lead >= 0:
+            direction = "同花顺领先(偏多)"
+        else:
+            direction = "同花顺落后(偏空)"
+        msg = f"【告警】领先差 {lead:+.2f}（同花顺-模拟，|{spread:.2f}| >= {th:.0f}）{direction}"
         messages.append(msg)
         self._mark_alert("abs_spread")
         self._log_row("ALERT", snap)
-        self._webhook({"type": "alert", "spread": signed, "abs": spread, **snap})
+        self._webhook({"type": "alert", "lead_spread": lead, "abs": spread, **snap})
         self._beep(urgent=True)
         return messages
 
