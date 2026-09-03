@@ -32,10 +32,20 @@ def load_sw(raw: dict) -> SoftwareConfig:
     )
 
 
+def _overlap(a, b) -> bool:
+    if not a or not b:
+        return False
+    ax2, ay2 = a.x + a.w, a.y + a.h
+    bx2, by2 = b.x + b.w, b.y + b.h
+    return not (ax2 < b.x or bx2 < a.x or ay2 < b.y or by2 < a.y)
+
+
 def test_one(name: str, cfg: SoftwareConfig, lo: float, hi: float) -> None:
     print(f"\n{'=' * 60}")
     print(f"  {name}  window_title={cfg.window_title!r}  mode={cfg.read_mode}")
     print(f"  regions={cfg.regions}")
+    if _overlap(cfg.regions.bid, cfg.regions.ask):
+        print("  ⚠ bid 和 ask 区域重叠，请分别框「买价」和「卖价」，不要框同一个数字")
     q, st = read_quote(cfg, lo, hi)
     print(f"  窗口找到: {st.window_found}  标题: {st.window_title!r}")
     print(f"  读取模式: {st.mode_used}  控件数: {st.control_count}")
@@ -43,15 +53,19 @@ def test_one(name: str, cfg: SoftwareConfig, lo: float, hi: float) -> None:
         print(f"  错误: {st.error}")
     print(f"  结果: bid={q.bid} ask={q.ask} last={q.last} valid={q.valid()}")
 
-    # 保存 OCR 调试截图，方便检查框选是否准确
-    if cfg.regions.bid:
-        try:
-            from region_reader import ocr_region
+    from region_reader import ocr_region
 
-            ocr_region(cfg.regions.bid, lo, hi, save_debug=f"debug_{name}_bid.png")
-            print(f"  调试截图: debug_{name}_bid.png")
+    for field in ("bid", "ask", "last"):
+        region = getattr(cfg.regions, field)
+        if not region:
+            continue
+        try:
+            price, raw = ocr_region(
+                region, lo, hi, save_debug=f"debug_{name}_{field}.png", return_text=True
+            )
+            print(f"  {field}: {price}  OCR原文={raw!r}  截图=debug_{name}_{field}.png")
         except Exception as exc:
-            print(f"  调试截图失败: {exc}")
+            print(f"  {field} 调试失败: {exc}")
 
 
 def main() -> None:
@@ -79,9 +93,8 @@ def main() -> None:
     test_one("software_b", load_sw(raw["software_b"]), lo, hi)
 
     print("\n" + "=" * 60)
-    print("OCR 推荐 Windows 内置（config.yaml → ocr.engine: windows）:")
-    print("  python -m pip install -r requirements.txt")
-    print("若读价失败，检查 debug_*.png 截图，必要时重新标定区域")
+    print("打开 debug_*.png 看框选是否盖住价格数字。")
+    print("若 OCR原文 为空或不是价格，重新标定该字段。")
 
 
 if __name__ == "__main__":

@@ -66,6 +66,10 @@ def _ocr_easyocr(img: Image.Image) -> str:
         paragraph=False,
         detail=1,
     )
+    text = " ".join(str(item[1]) for item in results)
+    if text.strip():
+        return text
+    results = _EASYOCR_READER.readtext(arr, paragraph=False, detail=1)
     return " ".join(str(item[1]) for item in results)
 
 

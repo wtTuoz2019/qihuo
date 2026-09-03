@@ -18,7 +18,7 @@ except ImportError:
 
 from ocr_engine import configure, ocr_image
 
-PRICE_FROM_TEXT = re.compile(r"(\d{1,6}\.\d{1,2})")
+PRICE_FROM_TEXT = re.compile(r"(\d{4,6}(?:\.\d{1,2})?)")
 
 
 @dataclass
@@ -77,40 +77,80 @@ def _capture(region: Region) -> Image.Image:
         return Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
 
 
+def _upscale(img: Image.Image, scale: int = 3) -> Image.Image:
+    return img.resize(
+        (max(img.width * scale, 80), max(img.height * scale, 28)),
+        Image.Resampling.LANCZOS,
+    )
+
+
 def _preprocess(img: Image.Image) -> Image.Image:
     gray = img.convert("L")
-    up = gray.resize((max(gray.width * 3, 60), max(gray.height * 3, 24)), Image.Resampling.LANCZOS)
+    up = _upscale(gray)
     arr = np.array(up)
     boosted = np.clip((arr.astype(np.float32) - 50) * 2.5, 0, 255).astype(np.uint8)
-    binary = Image.fromarray(boosted)
-    return ImageOps.autocontrast(binary)
+    return ImageOps.autocontrast(Image.fromarray(boosted))
 
 
 def _parse_price_text(text: str, lo: float, hi: float) -> Optional[float]:
-    cleaned = text.replace(",", "").replace(" ", "")
+    cleaned = (
+        text.replace(",", "")
+        .replace(" ", "")
+        .replace("O", "0")
+        .replace("o", "0")
+        .replace("l", "1")
+        .replace("I", "1")
+    )
     for m in PRICE_FROM_TEXT.findall(cleaned):
         val = float(m)
         if lo <= val <= hi:
             return val
     digits = re.sub(r"[^\d.]", "", cleaned)
-    if digits.count(".") == 1:
-        try:
+    if not digits:
+        return None
+    try:
+        if digits.count(".") == 1:
             val = float(digits)
-            if lo <= val <= hi:
-                return val
-        except ValueError:
-            pass
+        elif digits.isdigit() and 6 <= len(digits) <= 8:
+            # 2917675 → 29176.75 （纳指常见两位小数）
+            val = float(digits[:-2] + "." + digits[-2:])
+        elif digits.isdigit():
+            val = float(digits)
+        else:
+            return None
+        if lo <= val <= hi:
+            return val
+    except ValueError:
+        pass
     return None
 
 
-def ocr_region(region: Region, lo: float, hi: float, save_debug: str = "") -> Optional[float]:
+def ocr_region(
+    region: Region,
+    lo: float,
+    hi: float,
+    save_debug: str = "",
+    return_text: bool = False,
+):
     img = _capture(region)
-    proc = _preprocess(img)
+    color = _upscale(img)
+    gray = _preprocess(img)
     if save_debug:
-        proc.save(save_debug)
+        color.save(save_debug)
+        gray.save(save_debug.replace(".png", "_gray.png"))
 
-    text = ocr_image(proc)
-    return _parse_price_text(text, lo, hi)
+    texts: list[str] = []
+    price = None
+    for candidate in (color, gray):
+        text = ocr_image(candidate)
+        texts.append(text)
+        price = _parse_price_text(text, lo, hi)
+        if price is not None:
+            break
+    raw = " | ".join(t for t in texts if t)
+    if return_text:
+        return price, raw
+    return price
 
 
 def read_regions(regions: RegionSet, lo: float, hi: float) -> tuple[Optional[float], Optional[float], Optional[float]]:
