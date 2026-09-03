@@ -101,8 +101,7 @@ class AlertEngine:
             ])
 
         line = (
-            f"{now:%Y-%m-%d %H:%M:%S.%f}"[:-3]
-            f" {event}"
+            f"{iso} {event}"
             f" A={snap.get('a_last')} B={snap.get('b_last')}"
             f" 价差={snap.get('last_spread')}"
             f" Mid={snap.get('mid_spread')}"
