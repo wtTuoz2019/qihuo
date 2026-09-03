@@ -68,18 +68,28 @@ CONTROLS_TTL_SEC = 3.0
 def find_window(keyword: str):
     if auto is None:
         raise RuntimeError("uiautomation 未安装")
-    root = auto.GetRootControl()
-    for win in root.GetChildren():
-        title = win.Name or ""
-        if keyword in title and win.ControlTypeName == "WindowControl":
-            return win
+    try:
+        root = auto.GetRootControl()
+        for win in root.GetChildren():
+            try:
+                title = win.Name or ""
+                ctype = win.ControlTypeName
+            except Exception:
+                continue
+            if keyword in title and ctype == "WindowControl":
+                return win
+    except Exception:
+        return None
     return None
 
 
 def control_text(control) -> str:
-    name = (control.Name or "").strip()
-    if name:
-        return name
+    try:
+        name = (control.Name or "").strip()
+        if name:
+            return name
+    except Exception:
+        pass
     try:
         return (control.GetLegacyIAccessiblePattern().Value or "").strip()
     except Exception:

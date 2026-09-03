@@ -202,84 +202,103 @@ def main() -> None:
     print(f"  日志: {log_path(cfg.alert.log_txt).name}  /  {log_path(cfg.alert.log_csv).name}")
     print("-" * 72)
 
-    wins = list_windows()
-    for key, title in [(cfg.software_a.window_title, "A"), (cfg.software_b.window_title, "B")]:
-        hit = [w for w in wins if key in w]
-        print(f"  窗口[{title}] 匹配: {hit if hit else '无 — 检查 window_title 或改用 region 模式'}")
+    print("-" * 72)
 
+    try:
+        wins = list_windows()
+        for key, title in [(cfg.software_a.window_title, "A"), (cfg.software_b.window_title, "B")]:
+            hit = [w for w in wins if key in w]
+            print(f"  窗口[{title}] 匹配: {hit if hit else '无 — region 模式可不依赖窗口枚举'}")
+    except Exception as exc:
+        print(f"  窗口枚举跳过: {exc}")
+
+    print("-" * 72)
+    print("  持续运行中（Ctrl+C 停止）。COM/OCR 瞬时错误会自动重试。")
     print("-" * 72)
 
     last_line = ""
     fail_count = 0
     warned_setup = False
+    error_streak = 0
 
     while True:
         t0 = time.perf_counter()
+        try:
+            qa, sta = read_quote(cfg.software_a, lo, hi)
+            qb, stb = read_quote(cfg.software_b, lo, hi)
 
-        qa, sta = read_quote(cfg.software_a, lo, hi)
-        qb, stb = read_quote(cfg.software_b, lo, hi)
+            loop_ms = (time.perf_counter() - t0) * 1000
+            ts = datetime.now().strftime("%H:%M:%S.") + f"{datetime.now().microsecond // 1000:03d}"
 
-        loop_ms = (time.perf_counter() - t0) * 1000
-        ts = datetime.now().strftime("%H:%M:%S.") + f"{datetime.now().microsecond // 1000:03d}"
+            if not qa.valid() or not qb.valid():
+                fail_count += 1
+                if fail_count >= 20:
+                    invalidate_cache()
+                    fail_count = 0
+                print(f"[{ts}] 读价失败 (loop {loop_ms:.0f}ms)")
+                print(f"  {_explain_fail('A', cfg.software_a, sta)}")
+                print(f"  {_explain_fail('B', cfg.software_b, stb)}")
+                if not warned_setup:
+                    print("  >> 运行: python diagnose.py")
+                    print("  >> 标定: python calibrate_regions.py --target software_a")
+                    warned_setup = True
+                if args.once:
+                    sys.exit(1)
+                time.sleep(max(interval, 0.5))
+                continue
 
-        if not qa.valid() or not qb.valid():
-            fail_count += 1
-            if fail_count >= 20:
-                invalidate_cache()
-                fail_count = 0
-            print(f"[{ts}] 读价失败 (loop {loop_ms:.0f}ms)")
-            print(f"  {_explain_fail('A', cfg.software_a, sta)}")
-            print(f"  {_explain_fail('B', cfg.software_b, stb)}")
-            if not warned_setup:
-                print("  >> 运行: python diagnose.py")
-                print("  >> 标定: python calibrate_regions.py --target software_a")
-                warned_setup = True
+            fail_count = 0
+            error_streak = 0
+            snap = build_snapshot(qa, qb, loop_ms)
+
+            lead = snap["lead_spread"]
+
+            def _fmt_spread(v: Optional[float]) -> str:
+                return f"{v:+.2f}" if v is not None else "  --  "
+
+            line = (
+                f"[{ts}] "
+                f"模拟 {_fmt(qa.last)} 同花顺 {_fmt(qb.last)} | "
+                f"领先差 {_fmt_spread(lead)} | "
+                f"A {_fmt(qa.bid)}/{_fmt(qa.ask)} B {_fmt(qb.bid)}/{_fmt(qb.ask)} | "
+                f"{loop_ms:.0f}ms"
+            )
+
+            changed = line != last_line
+            if changed:
+                print(line)
+                last_line = line
+                engine.log_tick(snap)
+
+            alerts = engine.evaluate(snap)
+            for msg in alerts:
+                print(f"\033[91m{msg}\033[0m")
+            if alerts:
+                order_msg = trader.maybe_order(snap)
+                if order_msg:
+                    print(f"\033[93m【下单】{order_msg}\033[0m")
+
             if args.once:
-                sys.exit(1)
-            time.sleep(max(interval, 0.5))
-            continue
+                break
 
-        fail_count = 0
-        snap = build_snapshot(qa, qb, loop_ms)
+            elapsed = time.perf_counter() - t0
+            sleep_sec = max(0.0, interval - elapsed)
+            if sleep_sec:
+                time.sleep(sleep_sec)
 
-        exec_ab = snap["exec_a_sell_b_buy"]
-        exec_ba = snap["exec_b_sell_a_buy"]
-        mid = snap["mid_spread"]
-        last_sp = snap["last_spread"]
-        lead = snap["lead_spread"]
-
-        def _fmt_spread(v: Optional[float]) -> str:
-            return f"{v:+.2f}" if v is not None else "  --  "
-
-        line = (
-            f"[{ts}] "
-            f"模拟 {_fmt(qa.last)} 同花顺 {_fmt(qb.last)} | "
-            f"领先差 {_fmt_spread(lead)} | "
-            f"A {_fmt(qa.bid)}/{_fmt(qa.ask)} B {_fmt(qb.bid)}/{_fmt(qb.ask)} | "
-            f"{loop_ms:.0f}ms"
-        )
-
-        changed = line != last_line
-        if changed:
-            print(line)
-            last_line = line
-            engine.log_tick(snap)
-
-        alerts = engine.evaluate(snap)
-        for msg in alerts:
-            print(f"\033[91m{msg}\033[0m")
-        if alerts:
-            order_msg = trader.maybe_order(snap)
-            if order_msg:
-                print(f"\033[93m【下单】{order_msg}\033[0m")
-
-        if args.once:
+        except KeyboardInterrupt:
+            print("\n已停止监控")
             break
-
-        elapsed = time.perf_counter() - t0
-        sleep_sec = max(0.0, interval - elapsed)
-        if sleep_sec:
-            time.sleep(sleep_sec)
+        except Exception as exc:
+            error_streak += 1
+            ts = datetime.now().strftime("%H:%M:%S")
+            print(f"[{ts}] 瞬时错误，继续运行 ({error_streak}): {exc}")
+            if error_streak >= 50:
+                invalidate_cache()
+                error_streak = 0
+            time.sleep(max(interval, 1.0))
+            if args.once:
+                raise
 
 
 if __name__ == "__main__":

@@ -50,18 +50,51 @@ def list_windows() -> list[str]:
     if auto is None:
         return []
     titles: list[str] = []
-    root = auto.GetRootControl()
-    for win in root.GetChildren():
-        if win.ControlTypeName == "WindowControl" and win.Name:
-            titles.append(win.Name)
+    try:
+        root = auto.GetRootControl()
+        for win in root.GetChildren():
+            try:
+                if win.ControlTypeName == "WindowControl" and win.Name:
+                    titles.append(win.Name)
+            except Exception:
+                continue
+    except Exception:
+        return titles
     return titles
 
 
 def read_quote(cfg: SoftwareConfig, lo: float, hi: float) -> tuple[Quote, ReadStatus]:
     status = ReadStatus()
-    win = find_window(cfg.window_title) if cfg.window_title else None
-    status.window_found = win is not None
-    status.window_title = win.Name if win else ""
+
+    mode = cfg.read_mode
+    if mode == "auto":
+        mode = "region" if cfg.regions.any() else "ui"
+
+    # region 模式不碰 UIAutomation，避免 COM「拒绝访问」把进程打崩
+    if mode == "region":
+        status.mode_used = "region"
+        if not cfg.regions.any():
+            status.error = "read_mode=region 但未配置 regions，请先运行 calibrate_regions.py"
+            return Quote(ts=time.perf_counter()), status
+        try:
+            bid, ask, last = read_regions(cfg.regions, lo, hi)
+            status.window_found = True
+            return Quote(bid=bid, ask=ask, last=last, ts=time.perf_counter()), status
+        except Exception as exc:
+            status.error = str(exc)
+            return Quote(ts=time.perf_counter()), status
+
+    win = None
+    try:
+        win = find_window(cfg.window_title) if cfg.window_title else None
+        status.window_found = win is not None
+        if win is not None:
+            try:
+                status.window_title = win.Name or ""
+            except Exception:
+                status.window_title = cfg.window_title
+    except Exception as exc:
+        status.error = f"find_window: {exc}"
 
     ui_cfg = UiSoftwareConfig(
         window_title=cfg.window_title,
@@ -70,22 +103,6 @@ def read_quote(cfg: SoftwareConfig, lo: float, hi: float) -> tuple[Quote, ReadSt
         ask_control_name=cfg.ask_control_name,
         last_control_name=cfg.last_control_name,
     )
-
-    mode = cfg.read_mode
-    if mode == "auto":
-        mode = "region" if cfg.regions.any() else "ui"
-
-    if mode == "region":
-        if not cfg.regions.any():
-            status.error = "read_mode=region 但未配置 regions，请先运行 calibrate_regions.py"
-            return Quote(ts=time.perf_counter()), status
-        try:
-            bid, ask, last = read_regions(cfg.regions, lo, hi)
-            status.mode_used = "region"
-            return Quote(bid=bid, ask=ask, last=last, ts=time.perf_counter()), status
-        except Exception as exc:
-            status.error = str(exc)
-            return Quote(ts=time.perf_counter()), status
 
     # UI 模式
     try:
