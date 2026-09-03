@@ -24,16 +24,24 @@ def main() -> None:
     ocr.setdefault("engine", "easyocr")
     cfg["ocr"] = ocr
     alert = cfg.get("alert") or {}
-    alert["spread_yuan"] = 5.0
     alert["confirm_reads"] = 2
     alert["cooldown_ms"] = 2000
     alert["sound"] = True
     alert["log_csv"] = "spreads.csv"
     alert["log_txt"] = "spreads.log"
     cfg["alert"] = alert
+    trade = cfg.get("trade") or {}
+    trade.setdefault("alert_spread", 5.0)
+    trade.setdefault("order_spread", 5.0)
+    trade.setdefault("auto_order", False)
+    trade.setdefault("dry_run", True)
+    trade.setdefault("lots", 1)
+    trade.setdefault("software", "software_a")
+    cfg["trade"] = trade
     CONFIG.write_text(yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False), encoding="utf-8")
-    print("✓ 已写入告警设置（regions 未改）")
-    print("  |价差| >= 5 点 → 蜂鸣 + 写入 logs/spreads.log / logs/spreads.csv")
+    print("✓ 已写入告警/下单设置（regions 与 clicks 未覆盖）")
+    print(f"  改阈值: 编辑 config.yaml → trade.alert_spread / trade.order_spread")
+    print("  下单标定: python calibrate_order.py")
     print("下一步: python spread_monitor.py")
 
 

@@ -24,6 +24,7 @@ except ImportError:
     yaml = None
 
 from alert import AlertConfig, AlertEngine
+from order import OrderExecutor, TradeConfig
 from quote_reader import (
     Quote,
     QuoteLabels,
@@ -48,6 +49,7 @@ class AppConfig:
     software_b: SoftwareConfig
     compare: CompareConfig
     alert: AlertConfig
+    trade: TradeConfig
     price_range: tuple[float, float] = (1000, 999999)
     log_every_tick: bool = False
     ocr: dict = field(default_factory=dict)
@@ -82,12 +84,20 @@ def load_config(path: Path) -> AppConfig:
         )
 
     alert_raw = raw.get("alert") or {}
+    trade_raw = raw.get("trade") or {}
     webhook = raw.get("webhook") or {}
     pr = raw.get("price_range") or [1000, 999999]
 
+    titles = {
+        "software_a": (raw.get("software_a") or {}).get("window_title", "行情交易系统"),
+        "software_b": (raw.get("software_b") or {}).get("window_title", "同花顺"),
+    }
+    trade = TradeConfig.from_dict(trade_raw, titles)
+    alert_spread = float(trade_raw.get("alert_spread", alert_raw.get("spread_yuan", 5.0)))
+
     alert = AlertConfig(
         tick_size=float(alert_raw.get("tick_size", 0.25)),
-        spread_yuan=float(alert_raw.get("spread_yuan", 5.0)),
+        spread_yuan=alert_spread,
         confirm_reads=int(alert_raw.get("confirm_reads", 2)),
         cooldown_ms=int(alert_raw.get("cooldown_ms", 2000)),
         sound=bool(alert_raw.get("sound", True)),
@@ -103,6 +113,7 @@ def load_config(path: Path) -> AppConfig:
         software_b=sw("software_b"),
         compare=CompareConfig(mode=(raw.get("compare") or {}).get("mode", "executable")),
         alert=alert,
+        trade=trade,
         price_range=(float(pr[0]), float(pr[1])),
         log_every_tick=bool(raw.get("log_every_tick", False)),
         ocr=raw.get("ocr") or {},
@@ -165,6 +176,7 @@ def main() -> None:
     cfg = load_config(Path(args.config))
     interval = cfg.poll_interval_ms / 1000.0
     engine = AlertEngine(cfg.alert)
+    trader = OrderExecutor(cfg.trade)
     lo, hi = cfg.price_range
 
     from region_reader import init_ocr_from_config
@@ -177,7 +189,8 @@ def main() -> None:
     print(f"  A: {cfg.software_a.window_title!r} mode={cfg.software_a.read_mode}")
     print(f"  B: {cfg.software_b.window_title!r} mode={cfg.software_b.read_mode}")
     print(f"  轮询: {cfg.poll_interval_ms} ms")
-    print(f"  告警: |价差| >= {cfg.alert.spread_yuan:.0f} 点  声音={cfg.alert.sound}")
+    print(f"  告警: |价差| >= {cfg.trade.alert_spread:.1f} 点  声音={cfg.alert.sound}")
+    print(f"  下单: auto_order={cfg.trade.auto_order} dry_run={cfg.trade.dry_run} 阈值={cfg.trade.order_spread:.1f}")
     from paths import log_path
 
     print(f"  日志目录: logs/")
@@ -250,6 +263,10 @@ def main() -> None:
         alerts = engine.evaluate(snap)
         for msg in alerts:
             print(f"\033[91m{msg}\033[0m")
+        if alerts:
+            order_msg = trader.maybe_order(snap)
+            if order_msg:
+                print(f"\033[93m【下单】{order_msg}\033[0m")
 
         if args.once:
             break

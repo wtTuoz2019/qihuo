@@ -39,15 +39,27 @@ software_b:
 compare:
   mode: executable
 
+# 阈值与下单（改这里即可，不必改代码）
+trade:
+  alert_spread: 5.0      # |价差| >= 此值告警
+  order_spread: 5.0      # |价差| >= 此值才考虑下单
+  auto_order: false      # true 才允许走下单模块
+  dry_run: true          # true=只写 logs/orders.log，不点鼠标
+  lots: 1
+  cooldown_ms: 5000
+  software: software_a   # 默认在模拟客户端下单
+  clicks:                # python calibrate_order.py 填写 [x, y]
+    buy: [0, 0]
+    sell: [0, 0]
+    confirm: [0, 0]
+
 alert:
   tick_size: 0.25
-  spread_yuan: 5.0       # |A最新价-B最新价| >= 5 点告警
-  confirm_reads: 2       # 连续 2 次确认，减少 OCR 误报
-  cooldown_ms: 2000      # 同方向 2 秒内不重复蜂鸣
+  confirm_reads: 2
+  cooldown_ms: 2000
   sound: true
   log_csv: spreads.csv
   log_txt: spreads.log
-  # 实际写入 logs/spreads.csv 与 logs/spreads.log
 
 webhook:
   enabled: false
