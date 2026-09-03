@@ -268,12 +268,12 @@ def main() -> None:
             if changed:
                 print(line)
                 last_line = line
-                engine.log_tick(snap)
 
             alerts = engine.evaluate(snap)
             for msg in alerts:
                 print(f"\033[91m{msg}\033[0m")
             if alerts:
+                # 仅告警时写 logs/（价差达到阈值）
                 order_msg = trader.maybe_order(snap)
                 if order_msg:
                     print(f"\033[93m【下单】{order_msg}\033[0m")

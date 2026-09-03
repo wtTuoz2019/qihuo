@@ -19,7 +19,7 @@ def main() -> None:
         raise SystemExit(1)
 
     cfg = yaml.safe_load(CONFIG.read_text(encoding="utf-8")) or {}
-    cfg["log_every_tick"] = True
+    cfg["log_every_tick"] = False
     ocr = cfg.get("ocr") or {}
     ocr.setdefault("engine", "easyocr")
     cfg["ocr"] = ocr
@@ -41,9 +41,8 @@ def main() -> None:
     trade.setdefault("lots", 1)
     cfg["trade"] = trade
     CONFIG.write_text(yaml.safe_dump(cfg, allow_unicode=True, sort_keys=False), encoding="utf-8")
-    print("✓ 已写入：同花顺领先 → 模拟客户端跟单")
+    print("✓ 已写入：只记录价差达阈值的告警（不写全量 tick）")
     print("  lead=同花顺-模拟  >=5开多  <=-5开空")
-    print("  改阈值: config.yaml → trade.open_long_spread / open_short_spread")
     print("下一步: python spread_monitor.py")
 
 

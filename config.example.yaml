@@ -2,7 +2,7 @@
 
 poll_interval_ms: 100
 
-log_every_tick: true
+log_every_tick: false
 price_range: [10000, 99999]
 
 # OCR — 你已安装 EasyOCR 时用 easyocr
