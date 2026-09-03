@@ -5,9 +5,9 @@ poll_interval_ms: 100
 log_every_tick: false
 price_range: [10000, 99999]
 
-# OCR — 推荐 Windows 内置（安装快）；EasyOCR 体积大、慢，可不装
+# OCR — 你已安装 EasyOCR 时用 easyocr
 ocr:
-  engine: windows       # windows | auto | easyocr | tesseract
+  engine: easyocr       # easyocr | windows | auto | tesseract
   tesseract_cmd: ""
 
 # 软件 A：模拟客户端 / 行情交易系统

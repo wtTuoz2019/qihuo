@@ -62,7 +62,7 @@ class RegionSet:
 def init_ocr_from_config(ocr_cfg: dict | None) -> None:
     ocr_cfg = ocr_cfg or {}
     configure(
-        engine=ocr_cfg.get("engine", "windows"),
+        engine=ocr_cfg.get("engine", "easyocr"),
         tesseract_cmd=ocr_cfg.get("tesseract_cmd", ""),
     )
 
